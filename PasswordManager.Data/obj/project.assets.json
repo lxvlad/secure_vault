@@ -1,0 +1,95 @@
+{
+  "version": 3,
+  "targets": {
+    "net9.0": {
+      "PasswordManager.Core/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v9.0",
+        "compile": {
+          "bin/placeholder/PasswordManager.Core.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/PasswordManager.Core.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "PasswordManager.Core/1.0.0": {
+      "type": "project",
+      "path": "../PasswordManager.Core/PasswordManager.Core.csproj",
+      "msbuildProject": "../PasswordManager.Core/PasswordManager.Core.csproj"
+    }
+  },
+  "projectFileDependencyGroups": {
+    "net9.0": [
+      "PasswordManager.Core >= 1.0.0"
+    ]
+  },
+  "packageFolders": {
+    "/Users/vlish21/.nuget/packages/": {}
+  },
+  "project": {
+    "version": "1.0.0",
+    "restore": {
+      "projectUniqueName": "/Users/vlish21/Desktop/PasswordManagerPro/PasswordManager.Data/PasswordManager.Data.csproj",
+      "projectName": "PasswordManager.Data",
+      "projectPath": "/Users/vlish21/Desktop/PasswordManagerPro/PasswordManager.Data/PasswordManager.Data.csproj",
+      "packagesPath": "/Users/vlish21/.nuget/packages/",
+      "outputPath": "/Users/vlish21/Desktop/PasswordManagerPro/PasswordManager.Data/obj/",
+      "projectStyle": "PackageReference",
+      "configFilePaths": [
+        "/Users/vlish21/.nuget/NuGet/NuGet.Config"
+      ],
+      "originalTargetFrameworks": [
+        "net9.0"
+      ],
+      "sources": {
+        "https://api.nuget.org/v3/index.json": {}
+      },
+      "frameworks": {
+        "net9.0": {
+          "targetAlias": "net9.0",
+          "projectReferences": {
+            "/Users/vlish21/Desktop/PasswordManagerPro/PasswordManager.Core/PasswordManager.Core.csproj": {
+              "projectPath": "/Users/vlish21/Desktop/PasswordManagerPro/PasswordManager.Core/PasswordManager.Core.csproj"
+            }
+          }
+        }
+      },
+      "warningProperties": {
+        "warnAsError": [
+          "NU1605"
+        ]
+      },
+      "restoreAuditProperties": {
+        "enableAudit": "true",
+        "auditLevel": "low",
+        "auditMode": "direct"
+      },
+      "SdkAnalysisLevel": "9.0.200"
+    },
+    "frameworks": {
+      "net9.0": {
+        "targetAlias": "net9.0",
+        "imports": [
+          "net461",
+          "net462",
+          "net47",
+          "net471",
+          "net472",
+          "net48",
+          "net481"
+        ],
+        "assetTargetFallback": true,
+        "warn": true,
+        "frameworkReferences": {
+          "Microsoft.NETCore.App": {
+            "privateAssets": "all"
+          }
+        },
+        "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/9.0.200/PortableRuntimeIdentifierGraph.json"
+      }
+    }
+  }
+}
