@@ -1,41 +1,55 @@
+using Microsoft.EntityFrameworkCore;
+using PasswordManager.Core.Interfaces;
+using PasswordManager.Core.Services;
+using PasswordManager.Data;
+using Scalar.AspNetCore; // Підключаємо новий інтерфейс
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// === 1. ПІДКЛЮЧЕННЯ БАЗИ ДАНИХ ===
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// === ДОДАЄМО НАШ КРИПТОСЕРВІС ===
+builder.Services.AddScoped<ICryptoService, CryptoService>();
+
+// === 2. РЕЄСТРАЦІЯ СЕРВІСІВ ===
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+
+// Використовуємо рідний OpenAPI від .NET 9 замість Swagger
+builder.Services.AddOpenApi(); 
+
+// === ДОДАЄМО CORS (щоб React міг робити запити) ===
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReact", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173") // Стандартний порт Vite/React
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+// =================================================
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// === 3. НАЛАШТУВАННЯ HTTP-ПАЙПЛАЙНУ ===
 if (app.Environment.IsDevelopment())
 {
+    // Генеруємо специфікацію
     app.MapOpenApi();
+    
+    // Підключаємо красивий візуальний інтерфейс Scalar (замість SwaggerUI)
+    app.MapScalarApiReference(); 
 }
+
+// === ВМИКАЄМО CORS ===
+app.UseCors("AllowReact"); 
+// =====================
 
 app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+app.UseAuthorization(); 
+app.MapControllers(); 
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

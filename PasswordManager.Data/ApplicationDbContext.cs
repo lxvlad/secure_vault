@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using PasswordManager.Core.Entities;
+using PasswordManager.Core.Entities; // Підключаємо наші моделі з іншого проєкту
 
-namespace PasswordManager.Data;
+namespace PasswordManager.Data; // Обов'язково вказуємо простір імен
 
 public class ApplicationDbContext : DbContext
 {
