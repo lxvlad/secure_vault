@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { Container, Card, CardContent, Typography, TextField, Button, Box, AppBar, Toolbar, Paper, IconButton, InputAdornment, LinearProgress } from '@mui/material';
-import { Visibility, VisibilityOff, Delete, Edit, Search } from '@mui/icons-material';
+import { Visibility, VisibilityOff, Delete, Edit, Search, Star, StarBorder } from '@mui/icons-material';
 
 const API_URL = 'http://localhost:5072/api/Vault';
 
@@ -15,18 +15,12 @@ export default function App() {
   const [showPassword, setShowPassword] = useState(false);
 
   const [vault, setVault] = useState<any[]>([]);
-  
-  // Стани форми
   const [newService, setNewService] = useState('');
   const [newLogin, setNewLogin] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  
   const [editingRecordId, setEditingRecordId] = useState<number | null>(null);
-  
-  // Стан для пошуку
   const [searchQuery, setSearchQuery] = useState('');
 
-  // === АВТОРИЗАЦІЯ ===
   const handleInitVault = async () => {
     try {
       const res = await axios.post(`${API_URL}/init`, { username, masterPassword });
@@ -54,7 +48,6 @@ export default function App() {
     setVault(res.data.vault);
   };
 
-  // === ЗБЕРЕЖЕННЯ ===
   const handleSavePassword = async () => {
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
@@ -62,28 +55,37 @@ export default function App() {
         await axios.put(`${API_URL}/edit`, {
           userId, masterPassword: sessionPassword, recordId: editingRecordId, service: newService, login: newLogin, password: newPassword
         }, config);
-        alert("Запис оновлено!");
       } else {
         await axios.post(`${API_URL}/add`, {
           userId, masterPassword: sessionPassword, service: newService, login: newLogin, password: newPassword
         }, config);
-        alert("Пароль збережено!");
       }
       resetForm();
       await fetchVault();
     } catch (error) {
-      alert("Помилка збереження (Можливо, термін дії токена минув)");
+      alert("Помилка збереження.");
     }
   };
 
   const handleDelete = async (recordId: number) => {
-    if (!window.confirm("Ви впевнені, що хочете видалити цей пароль?")) return;
+    if (!window.confirm("Видалити цей пароль?")) return;
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
       await axios.delete(`${API_URL}/delete/${recordId}?userId=${userId}`, config);
       await fetchVault(); 
     } catch (error) {
       alert("Помилка видалення.");
+    }
+  };
+
+  // --- НОВА ФУНКЦІЯ: ПЕРЕМИКАЧ ОБРАНОГО ---
+  const handleToggleFavorite = async (recordId: number) => {
+    try {
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      await axios.patch(`${API_URL}/toggle-favorite/${recordId}?userId=${userId}`, {}, config);
+      await fetchVault(); // Оновлюємо список, щоб побачити зміни
+    } catch (error) {
+      alert("Помилка оновлення статусу.");
     }
   };
 
@@ -103,20 +105,16 @@ export default function App() {
 
   const handleGeneratePassword = () => {
     const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
-    let generated = "";
-    for (let i = 0; i < 16; i++) {
-      generated += chars[Math.floor(Math.random() * chars.length)];
-    }
+    let generated = Array.from({length: 16}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
     setNewPassword(generated);
   };
 
   const handleSecureCopy = (text: string) => {
     navigator.clipboard.writeText(text);
-    alert("Скопійовано! Буфер обміну буде автоматично очищено через 30 секунд.");
+    alert("Скопійовано! Буфер очиститься через 30с.");
     setTimeout(() => navigator.clipboard.writeText(""), 30000);
   };
 
-  // === ЛОГІКА СКЛАДНОСТІ ПАРОЛЯ ===
   const getPasswordStrength = (pass: string) => {
     let score = 0;
     if (!pass) return 0;
@@ -130,31 +128,30 @@ export default function App() {
   const strengthScore = getPasswordStrength(newPassword);
   const strengthColor = strengthScore <= 25 ? 'error' : strengthScore <= 50 ? 'warning' : strengthScore <= 75 ? 'info' : 'success';
 
-  // === ЛОГІКА ПОШУКУ ===
-  const filteredVault = vault.filter(record => 
-    record.service.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    record.login.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // --- НОВА ЛОГІКА: ФІЛЬТРАЦІЯ ТА СОРТУВАННЯ (ОБРАНІ ЗВЕРХУ) ---
+  const filteredAndSortedVault = vault
+    .filter(record => 
+      record.service.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      record.login.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      // Якщо a - обране, а b - ні, то a піднімається вище (-1)
+      if (a.isFavorite && !b.isFavorite) return -1;
+      if (!a.isFavorite && b.isFavorite) return 1;
+      return 0;
+    });
 
   if (!userId) {
     return (
       <Container maxWidth="sm" sx={{ mt: 10 }}>
         <Card elevation={4}>
           <CardContent sx={{ p: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Typography variant="h4" align="center" sx={{ fontWeight: 'bold' }} gutterBottom>
-              Secure Vault
-            </Typography>
+            <Typography variant="h4" align="center" sx={{ fontWeight: 'bold' }} gutterBottom>Secure Vault</Typography>
             <TextField label="Логін" variant="outlined" fullWidth value={username} onChange={(e) => setUsername(e.target.value)} />
             <TextField 
               label="Майстер-пароль" type={showPassword ? 'text' : 'password'} 
               variant="outlined" fullWidth value={masterPassword} onChange={(e) => setMasterPassword(e.target.value)}
-              slotProps={{ input: { endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton onClick={() => setShowPassword(!showPassword)}>
-                    {showPassword ? <VisibilityOff /> : <Visibility />}
-                  </IconButton>
-                </InputAdornment>
-              )}}}
+              slotProps={{ input: { endAdornment: (<InputAdornment position="end"><IconButton onClick={() => setShowPassword(!showPassword)}>{showPassword ? <VisibilityOff /> : <Visibility />}</IconButton></InputAdornment>)}}}
             />
             <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
               <Button variant="contained" color="primary" fullWidth onClick={handleUnlock}>Увійти</Button>
@@ -176,27 +173,15 @@ export default function App() {
       </AppBar>
 
       <Container maxWidth="md" sx={{ mt: 4 }}>
-        
-        {/* Форма додавання з індикатором складності */}
         <Paper elevation={2} sx={{ p: 3, mb: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
             <TextField label="Сервіс" size="small" fullWidth value={newService} onChange={e => setNewService(e.target.value)} />
             <TextField label="Логін" size="small" fullWidth value={newLogin} onChange={e => setNewLogin(e.target.value)} />
             <Box sx={{ width: '100%' }}>
               <TextField label="Пароль" size="small" fullWidth type="text" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
-              {/* Смужка індикатора складності */}
-              {newPassword && (
-                <LinearProgress 
-                  variant="determinate" 
-                  value={strengthScore} 
-                  color={strengthColor} 
-                  sx={{ mt: 1, height: 6, borderRadius: 1 }} 
-                />
-              )}
+              {newPassword && <LinearProgress variant="determinate" value={strengthScore} color={strengthColor} sx={{ mt: 1, height: 6, borderRadius: 1 }} />}
             </Box>
-            
             <Button variant="outlined" onClick={handleGeneratePassword} sx={{ minWidth: '40px', px: 1, height: '40px' }} title="Згенерувати">🎲</Button>
-            
             <Button variant="contained" color={editingRecordId ? "success" : "primary"} onClick={handleSavePassword} sx={{ minWidth: '120px', height: '40px' }}>
               {editingRecordId ? "Оновити" : "Додати"}
             </Button>
@@ -204,27 +189,32 @@ export default function App() {
           </Box>
         </Paper>
 
-        {/* Блок з пошуком */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h5">Збережені записи ({filteredVault.length})</Typography>
+          <Typography variant="h5">Збережені записи ({filteredAndSortedVault.length})</Typography>
           <TextField 
-            size="small" 
-            placeholder="Пошук..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            size="small" placeholder="Пошук..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
             slotProps={{ input: { startAdornment: (<InputAdornment position="start"><Search fontSize="small" /></InputAdornment>) } }}
             sx={{ bgcolor: 'white', borderRadius: 1, width: '250px' }}
           />
         </Box>
 
-        {/* Список збережених паролів (використовуємо filteredVault замість vault) */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {filteredVault.map((record) => (
-            <Card key={record.id} elevation={1}>
+          {filteredAndSortedVault.map((record) => (
+            <Card key={record.id} elevation={1} sx={{ borderLeft: record.isFavorite ? '4px solid #ffb300' : 'none' }}>
               <CardContent sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, '&:last-child': { pb: 2 } }}>
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{record.service}</Typography>
-                  <Typography variant="body2" color="text.secondary">Логін: {record.login}</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {/* Кнопка-зірочка для Обраного */}
+                  <IconButton 
+                    onClick={() => handleToggleFavorite(record.id)} 
+                    sx={{ color: record.isFavorite ? '#ffb300' : 'default' }}
+                    title={record.isFavorite ? "Прибрати з обраного" : "Додати в обране"}
+                  >
+                    {record.isFavorite ? <Star /> : <StarBorder />}
+                  </IconButton>
+                  <Box>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>{record.service}</Typography>
+                    <Typography variant="body2" color="text.secondary">Логін: {record.login}</Typography>
+                  </Box>
                 </Box>
                 <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
                   <Box sx={{ bgcolor: '#e0f7fa', p: 1, borderRadius: 1, width: '120px', textAlign: 'center' }}>
@@ -237,7 +227,7 @@ export default function App() {
               </CardContent>
             </Card>
           ))}
-          {filteredVault.length === 0 && (
+          {filteredAndSortedVault.length === 0 && (
             <Typography variant="body1" color="text.secondary" align="center" sx={{ mt: 4 }}>
               Нічого не знайдено 🕵️‍♂️
             </Typography>

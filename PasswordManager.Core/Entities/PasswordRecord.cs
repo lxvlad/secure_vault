@@ -14,4 +14,6 @@ public class PasswordRecord
     
     // Вектор ініціалізації (Nonce), унікальний для кожного шифрування
     public byte[] Nonce { get; set; } = Array.Empty<byte>(); 
+
+    public bool IsFavorite { get; set; } = false;
 }

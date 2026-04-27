@@ -173,4 +173,21 @@ public class VaultController : ControllerBase
 
         return Ok(new { Message = "Запис видалено." });
     }
+
+    [Authorize]
+    [HttpPatch("toggle-favorite/{id}")]
+    public async Task<IActionResult> ToggleFavorite(int id, [FromQuery] int userId)
+    {
+        var record = await _context.PasswordRecords
+            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == userId);
+            
+        if (record == null) return NotFound("Запис не знайдено.");
+
+        // Перемикаємо статус на протилежний
+        record.IsFavorite = !record.IsFavorite; 
+        
+        await _context.SaveChangesAsync();
+
+        return Ok(new { Message = "Статус обраного оновлено." });
+    }
 }
