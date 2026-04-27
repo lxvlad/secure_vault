@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
-import { Container, Card, CardContent, Typography, TextField, Button, Box, AppBar, Toolbar, Paper, IconButton, InputAdornment } from '@mui/material';
-import { Visibility, VisibilityOff, Delete, Edit } from '@mui/icons-material';
+import { Container, Card, CardContent, Typography, TextField, Button, Box, AppBar, Toolbar, Paper, IconButton, InputAdornment, LinearProgress } from '@mui/material';
+import { Visibility, VisibilityOff, Delete, Edit, Search } from '@mui/icons-material';
 
 const API_URL = 'http://localhost:5072/api/Vault';
 
@@ -21,8 +21,10 @@ export default function App() {
   const [newLogin, setNewLogin] = useState('');
   const [newPassword, setNewPassword] = useState('');
   
-  // Стан для редагування (якщо null - це режим додавання, якщо число - режим редагування)
   const [editingRecordId, setEditingRecordId] = useState<number | null>(null);
+  
+  // Стан для пошуку
+  const [searchQuery, setSearchQuery] = useState('');
 
   // === АВТОРИЗАЦІЯ ===
   const handleInitVault = async () => {
@@ -52,34 +54,21 @@ export default function App() {
     setVault(res.data.vault);
   };
 
-  // === ЗБЕРЕЖЕННЯ (Додавання або Редагування) ===
+  // === ЗБЕРЕЖЕННЯ ===
   const handleSavePassword = async () => {
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
-
       if (editingRecordId) {
-        // Режим РЕДАГУВАННЯ
         await axios.put(`${API_URL}/edit`, {
-          userId,
-          masterPassword: sessionPassword,
-          recordId: editingRecordId,
-          service: newService,
-          login: newLogin,
-          password: newPassword
+          userId, masterPassword: sessionPassword, recordId: editingRecordId, service: newService, login: newLogin, password: newPassword
         }, config);
         alert("Запис оновлено!");
       } else {
-        // Режим ДОДАВАННЯ
         await axios.post(`${API_URL}/add`, {
-          userId,
-          masterPassword: sessionPassword,
-          service: newService,
-          login: newLogin,
-          password: newPassword
+          userId, masterPassword: sessionPassword, service: newService, login: newLogin, password: newPassword
         }, config);
         alert("Пароль збережено!");
       }
-      
       resetForm();
       await fetchVault();
     } catch (error) {
@@ -87,25 +76,22 @@ export default function App() {
     }
   };
 
-  // === ВИДАЛЕННЯ ===
   const handleDelete = async (recordId: number) => {
     if (!window.confirm("Ви впевнені, що хочете видалити цей пароль?")) return;
-    
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
       await axios.delete(`${API_URL}/delete/${recordId}?userId=${userId}`, config);
-      await fetchVault(); // Оновлюємо список після видалення
+      await fetchVault(); 
     } catch (error) {
       alert("Помилка видалення.");
     }
   };
 
-  // === ПІДГОТОВКА ДО РЕДАГУВАННЯ ===
   const startEdit = (record: any) => {
     setEditingRecordId(record.id);
     setNewService(record.service);
     setNewLogin(record.login);
-    setNewPassword(record.password); // Вставляємо розшифрований пароль у поле
+    setNewPassword(record.password);
   };
 
   const resetForm = () => {
@@ -129,6 +115,26 @@ export default function App() {
     alert("Скопійовано! Буфер обміну буде автоматично очищено через 30 секунд.");
     setTimeout(() => navigator.clipboard.writeText(""), 30000);
   };
+
+  // === ЛОГІКА СКЛАДНОСТІ ПАРОЛЯ ===
+  const getPasswordStrength = (pass: string) => {
+    let score = 0;
+    if (!pass) return 0;
+    if (pass.length >= 8) score += 25;
+    if (/[A-Z]/.test(pass)) score += 25;
+    if (/[0-9]/.test(pass)) score += 25;
+    if (/[^A-Za-z0-9]/.test(pass)) score += 25;
+    return score;
+  };
+
+  const strengthScore = getPasswordStrength(newPassword);
+  const strengthColor = strengthScore <= 25 ? 'error' : strengthScore <= 50 ? 'warning' : strengthScore <= 75 ? 'info' : 'success';
+
+  // === ЛОГІКА ПОШУКУ ===
+  const filteredVault = vault.filter(record => 
+    record.service.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    record.login.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   if (!userId) {
     return (
@@ -165,31 +171,55 @@ export default function App() {
       <AppBar position="static">
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>Мій Менеджер Паролів</Typography>
-          <Button color="inherit" onClick={() => { setUserId(null); setVault([]); setSessionPassword(''); setToken(null); }}>Вийти</Button>
+          <Button color="inherit" onClick={() => { setUserId(null); setVault([]); setSessionPassword(''); setToken(null); setSearchQuery(''); }}>Вийти</Button>
         </Toolbar>
       </AppBar>
 
       <Container maxWidth="md" sx={{ mt: 4 }}>
-        <Paper elevation={2} sx={{ p: 3, mb: 4, display: 'flex', gap: 2, alignItems: 'center' }}>
-          <TextField label="Сервіс" size="small" fullWidth value={newService} onChange={e => setNewService(e.target.value)} />
-          <TextField label="Логін" size="small" fullWidth value={newLogin} onChange={e => setNewLogin(e.target.value)} />
-          <TextField label="Пароль" size="small" fullWidth type="text" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
-          
-          <Button variant="outlined" onClick={handleGeneratePassword} sx={{ minWidth: '40px', px: 1 }} title="Згенерувати пароль">🎲</Button>
-          
-          {/* Динамічна кнопка: Зберегти зміни або Додати новий */}
-          <Button variant="contained" color={editingRecordId ? "success" : "primary"} onClick={handleSavePassword} sx={{ minWidth: '120px' }}>
-            {editingRecordId ? "Оновити" : "Додати"}
-          </Button>
-          
-          {editingRecordId && (
-            <Button variant="text" color="error" onClick={resetForm}>Скасувати</Button>
-          )}
+        
+        {/* Форма додавання з індикатором складності */}
+        <Paper elevation={2} sx={{ p: 3, mb: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <TextField label="Сервіс" size="small" fullWidth value={newService} onChange={e => setNewService(e.target.value)} />
+            <TextField label="Логін" size="small" fullWidth value={newLogin} onChange={e => setNewLogin(e.target.value)} />
+            <Box sx={{ width: '100%' }}>
+              <TextField label="Пароль" size="small" fullWidth type="text" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+              {/* Смужка індикатора складності */}
+              {newPassword && (
+                <LinearProgress 
+                  variant="determinate" 
+                  value={strengthScore} 
+                  color={strengthColor} 
+                  sx={{ mt: 1, height: 6, borderRadius: 1 }} 
+                />
+              )}
+            </Box>
+            
+            <Button variant="outlined" onClick={handleGeneratePassword} sx={{ minWidth: '40px', px: 1, height: '40px' }} title="Згенерувати">🎲</Button>
+            
+            <Button variant="contained" color={editingRecordId ? "success" : "primary"} onClick={handleSavePassword} sx={{ minWidth: '120px', height: '40px' }}>
+              {editingRecordId ? "Оновити" : "Додати"}
+            </Button>
+            {editingRecordId && <Button variant="text" color="error" onClick={resetForm}>Скасувати</Button>}
+          </Box>
         </Paper>
 
-        <Typography variant="h5" sx={{ mb: 2 }}>Збережені записи ({vault.length})</Typography>
+        {/* Блок з пошуком */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h5">Збережені записи ({filteredVault.length})</Typography>
+          <TextField 
+            size="small" 
+            placeholder="Пошук..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            slotProps={{ input: { startAdornment: (<InputAdornment position="start"><Search fontSize="small" /></InputAdornment>) } }}
+            sx={{ bgcolor: 'white', borderRadius: 1, width: '250px' }}
+          />
+        </Box>
+
+        {/* Список збережених паролів (використовуємо filteredVault замість vault) */}
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {vault.map((record) => (
+          {filteredVault.map((record) => (
             <Card key={record.id} elevation={1}>
               <CardContent sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, '&:last-child': { pb: 2 } }}>
                 <Box>
@@ -201,18 +231,17 @@ export default function App() {
                     <Typography variant="body1" sx={{ fontFamily: 'monospace' }}>••••••••</Typography>
                   </Box>
                   <Button size="small" variant="contained" color="secondary" onClick={() => handleSecureCopy(record.password)}>Копіювати</Button>
-                  
-                  {/* Кнопки Редагувати та Видалити */}
-                  <IconButton color="primary" onClick={() => startEdit(record)} title="Редагувати">
-                    <Edit />
-                  </IconButton>
-                  <IconButton color="error" onClick={() => handleDelete(record.id)} title="Видалити">
-                    <Delete />
-                  </IconButton>
+                  <IconButton color="primary" onClick={() => startEdit(record)} title="Редагувати"><Edit /></IconButton>
+                  <IconButton color="error" onClick={() => handleDelete(record.id)} title="Видалити"><Delete /></IconButton>
                 </Box>
               </CardContent>
             </Card>
           ))}
+          {filteredVault.length === 0 && (
+            <Typography variant="body1" color="text.secondary" align="center" sx={{ mt: 4 }}>
+              Нічого не знайдено 🕵️‍♂️
+            </Typography>
+          )}
         </Box>
       </Container>
     </Box>
