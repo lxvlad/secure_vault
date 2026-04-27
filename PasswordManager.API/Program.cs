@@ -3,6 +3,9 @@ using PasswordManager.Core.Interfaces;
 using PasswordManager.Core.Services;
 using PasswordManager.Data;
 using Scalar.AspNetCore; // Підключаємо новий інтерфейс
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +15,21 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 // === ДОДАЄМО НАШ КРИПТОСЕРВІС ===
 builder.Services.AddScoped<ICryptoService, CryptoService>();
+
+// === НАЛАШТУВАННЯ JWT ===
+var jwtSecret = builder.Configuration.GetValue<string>("JwtSettings:Secret");
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret!))
+        };
+    });
 
 // === 2. РЕЄСТРАЦІЯ СЕРВІСІВ ===
 builder.Services.AddControllers();
@@ -49,6 +67,7 @@ app.UseCors("AllowReact");
 // =====================
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
 app.UseAuthorization(); 
 app.MapControllers(); 
 
