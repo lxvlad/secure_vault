@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { Container, Card, CardContent, Typography, TextField, Button, Box, AppBar, Toolbar, Paper, IconButton, InputAdornment, LinearProgress } from '@mui/material';
-import { Visibility, VisibilityOff, Delete, Edit, Search, Star, StarBorder } from '@mui/icons-material';
+import { Visibility, VisibilityOff, Delete, Edit, Search, Star, StarBorder, Security } from '@mui/icons-material';
 
 const API_URL = 'http://localhost:5072/api/Vault';
 
@@ -78,14 +78,45 @@ export default function App() {
     }
   };
 
-  // --- НОВА ФУНКЦІЯ: ПЕРЕМИКАЧ ОБРАНОГО ---
   const handleToggleFavorite = async (recordId: number) => {
     try {
       const config = { headers: { Authorization: `Bearer ${token}` } };
       await axios.patch(`${API_URL}/toggle-favorite/${recordId}?userId=${userId}`, {}, config);
-      await fetchVault(); // Оновлюємо список, щоб побачити зміни
+      await fetchVault();
     } catch (error) {
       alert("Помилка оновлення статусу.");
+    }
+  };
+
+  // --- НОВА ФУНКЦІЯ: ПЕРЕВІРКА ВИТОКУ ПАРОЛЯ ---
+  const checkPasswordLeak = async (password: string) => {
+    try {
+      // 1. Хешуємо пароль алгоритмом SHA-1 (вбудовано в браузер)
+      const encoder = new TextEncoder();
+      const data = encoder.encode(password);
+      const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+
+      // 2. Беремо перші 5 символів (префікс) і решту (суфікс)
+      const prefix = hashHex.substring(0, 5);
+      const suffix = hashHex.substring(5);
+
+      // 3. Відправляємо ТІЛЬКИ префікс на Have I Been Pwned
+      const response = await axios.get(`https://api.pwnedpasswords.com/range/${prefix}`);
+      const hashes = response.data.split('\n');
+
+      // 4. Шукаємо наш суфікс у відповіді
+      const found = hashes.find((line: string) => line.startsWith(suffix));
+
+      if (found) {
+        const count = found.split(':')[1].trim();
+        alert(`⚠️ НЕБЕЗПЕКА! Цей пароль було знайдено у хакерських зливах ${count} разів. Негайно змініть його!`);
+      } else {
+        alert("✅ БЕЗПЕЧНО! Цей пароль не знайдено в жодних відомих витоках баз даних.");
+      }
+    } catch (error) {
+      alert("Помилка під час перевірки пароля з API.");
     }
   };
 
@@ -128,14 +159,12 @@ export default function App() {
   const strengthScore = getPasswordStrength(newPassword);
   const strengthColor = strengthScore <= 25 ? 'error' : strengthScore <= 50 ? 'warning' : strengthScore <= 75 ? 'info' : 'success';
 
-  // --- НОВА ЛОГІКА: ФІЛЬТРАЦІЯ ТА СОРТУВАННЯ (ОБРАНІ ЗВЕРХУ) ---
   const filteredAndSortedVault = vault
     .filter(record => 
       record.service.toLowerCase().includes(searchQuery.toLowerCase()) || 
       record.login.toLowerCase().includes(searchQuery.toLowerCase())
     )
     .sort((a, b) => {
-      // Якщо a - обране, а b - ні, то a піднімається вище (-1)
       if (a.isFavorite && !b.isFavorite) return -1;
       if (!a.isFavorite && b.isFavorite) return 1;
       return 0;
@@ -203,7 +232,6 @@ export default function App() {
             <Card key={record.id} elevation={1} sx={{ borderLeft: record.isFavorite ? '4px solid #ffb300' : 'none' }}>
               <CardContent sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, '&:last-child': { pb: 2 } }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  {/* Кнопка-зірочка для Обраного */}
                   <IconButton 
                     onClick={() => handleToggleFavorite(record.id)} 
                     sx={{ color: record.isFavorite ? '#ffb300' : 'default' }}
@@ -221,6 +249,12 @@ export default function App() {
                     <Typography variant="body1" sx={{ fontFamily: 'monospace' }}>••••••••</Typography>
                   </Box>
                   <Button size="small" variant="contained" color="secondary" onClick={() => handleSecureCopy(record.password)}>Копіювати</Button>
+                  
+                  {/* Нова кнопка зі щитом для перевірки витоку */}
+                  <IconButton color="info" onClick={() => checkPasswordLeak(record.password)} title="Перевірити на витік (HIBP)">
+                    <Security />
+                  </IconButton>
+                  
                   <IconButton color="primary" onClick={() => startEdit(record)} title="Редагувати"><Edit /></IconButton>
                   <IconButton color="error" onClick={() => handleDelete(record.id)} title="Видалити"><Delete /></IconButton>
                 </Box>

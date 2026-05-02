@@ -119,7 +119,9 @@ public class VaultController : ControllerBase
             v.Id,
             v.Service,
             v.Login,
-            Password = v.DecryptedPassword
+            Password = v.DecryptedPassword,
+            // Шукаємо оригінальний запис у базі по ID і беремо його статус IsFavorite
+            IsFavorite = encryptedVault.First(e => e.Id == v.Id).IsFavorite
         });
 
         var token = GenerateJwtToken(user.Id);
